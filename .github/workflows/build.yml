@@ -22,6 +22,8 @@ jobs:
 
       - name: Extract ZIP
         run: |
+          rm -rf project
+          mkdir project
           unzip -q shri_airavat_foods_billing_complete_v1.zip -d project
 
       - name: Download Gradle
@@ -29,18 +31,41 @@ jobs:
           curl -L -o gradle.zip https://services.gradle.org/distributions/gradle-8.7-bin.zip
           unzip -q gradle.zip
 
-      - name: Find Project
+      - name: Find Android Project
         run: |
+          echo "Android project files:"
           find project -name settings.gradle -o -name settings.gradle.kts
+          find project -name build.gradle -o -name build.gradle.kts
 
       - name: Build APK
         run: |
-          PROJECT_DIR=$(dirname "$(find project -name settings.gradle -o -name settings.gradle.kts | head -n 1)")
-          cd "$PROJECT_DIR"
-          ../../gradle-8.7/bin/gradle assembleDebug --no-daemon
+          SETTINGS_FILE=$(find "$GITHUB_WORKSPACE/project" \
+            -name settings.gradle \
+            -o -name settings.gradle.kts \
+            | head -n 1)
+
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "ERROR: Android project not found"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
+
+          echo "Project directory: $PROJECT_DIR"
+
+          "$GITHUB_WORKSPACE/gradle-8.7/bin/gradle" \
+            -p "$PROJECT_DIR" \
+            assembleDebug \
+            --no-daemon \
+            --stacktrace
+
+      - name: Find APK
+        run: |
+          find project -type f -name "*.apk"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: shri-airavat-foods-billing-apk
-          path: project/**/app/build/outputs/apk/debug/app-debug.apk
+          path: project/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
